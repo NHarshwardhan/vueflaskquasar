@@ -155,11 +155,22 @@ onMounted(()=>{
                     
                     </q-input>
                       
+                      <q-btn
+                          label="Export CSV"
+                          icon="download"
+                          color="primary"
+                          :loading="exportLoading"
+                          @click="handleExportCSV"
+                        
+                      />
+                               
+                      
+
                 <!-- Employee table -->
                      <q-table
                          :rows="employees"
                          :columns="columns"
-                         
+                         :loading="loading"                         
                          row-key="id"
                          flat
                          v-model:pagination="pagination"
@@ -177,12 +188,109 @@ onMounted(()=>{
 <script setup>
 import { getEmployees } from '@/api/employeeApi';
 import { computed, onMounted, ref } from 'vue';
+import { exportFile } from 'quasar';
 
   const employees = ref([])
   const loading = ref(false)
   const error = ref("")
   const search = ref("")
+  const exportLoading = ref(false)
   let searchTimer
+
+
+  const wrapCsvValue = (value)=>{  // John  => "John"
+    const formatted = value === null || value === undefined ? "" : String(value)
+    return  `"${formatted.replace(/"/g, '""')}"`    
+    // John "Johnny" Smith  =>  "John "Johnny" Smith" => confuse the csv parser
+    // "John ""Johnny"" Smith" => valid csv formatting
+
+  }
+
+  const handleExportCSV = ()=>{
+         /*
+         [
+          column -  "ID", "NAME", "EMAIL"
+          row -  "101" "john"  "john@test.com"
+         ] 
+         */
+
+      const content = [
+        // creating header row
+           columns.map(column => wrapCsvValue(column.label)).join(","),  //"ID", "NAME", "EMAIL"
+
+        //Process Employees Rows   
+        /*
+          [
+             header,
+             row1,
+             row2
+          ]
+        */ 
+           ...employees.value.map(row=>
+             
+           //Process each employee's column
+
+               columns.map(column=>{
+                // 1st row-  column => ID-101 NAME-john EMAIL- john@fmail.com
+                   /*
+                     { name: "name", label: "Name", field: "name"}
+
+                      column.field = "name"
+
+                      row = {name ="John", email : "John@gmail.com"}
+
+                      row[column.field] =>row["name"] => John 
+                   
+                   */
+                  
+
+                   /*
+                      typeof "name" => string
+                        column.field = "name"
+                        row[column.field ?? column.name]
+                        row["name"]
+                        => John
+
+                      =======================================
+                      typeof function(){} => function
+                        =>  column.field = (row) => row.name.toUpperCase()
+                             row= {name: "John"}
+                            
+                            column.field(row)
+                             => JOHN
+
+
+                   */
+
+                  const value = typeof column.field === "function"? column.field(row): row[column.field ?? column.name]
+
+
+                  return wrapCsvValue(value)
+
+               }).join(",")
+
+           )
+
+      ].join("\r\n") 
+    
+      const status = exportFile(
+        "employees.csv",
+        content,
+        "text/csv;charset=utf-8"
+        )
+
+    
+     if(status !== true){
+        error.value  = "unable to export employees"
+        console.error(stauts)
+    }  
+
+
+  }
+
+ 
+
+
 
 // const fetchEmployees = async()=>{
        
@@ -236,6 +344,8 @@ const columns = [
       {name: "name", label: "Name", field: "name" ,align: "left",sortable: true},
       {name: "email", label: "Email", field: "email" ,align: "left",sortable: true},
       {name: "department", label: "Department", field: "department" ,align: "left",sortable: true},
+      {name: "joining_date", label: "Joining_date", field: "joining_date" ,align: "left",sortable: true},
+
       
 ]
 
